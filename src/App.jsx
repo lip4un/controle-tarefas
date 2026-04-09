@@ -18,7 +18,6 @@ const STATUS_OPTIONS = [
   { id: 'faltou', label: 'Faltou', color: '#6B7280', icon: <UserMinus size={16}/> },
 ];
 
-// Agora os alunos estão separados pelas suas respectivas turmas (Anos)
 const MOCK_ALUNOS_POR_TURMA = {
   "1º Ano": [
     { id: 1, nome: "Ana Beatriz", stats: { completa: 12, incompleta: 2, naofez: 1, faltou: 0 } },
@@ -44,7 +43,6 @@ export default function App() {
   const [selectedTeacher, setSelectedTeacher] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
-  // O estado agora guarda o objeto inteiro com todas as turmas
   const [alunosList, setAlunosList] = useState(MOCK_ALUNOS_POR_TURMA);
 
   if (!user) {
@@ -58,7 +56,6 @@ export default function App() {
     setSidebarOpen(false);
   };
 
-  // Função para adicionar aluno na turma correta
   const handleAddAluno = (year, novoAluno) => {
     setAlunosList(prev => ({
       ...prev,
@@ -66,7 +63,6 @@ export default function App() {
     }));
   };
 
-  // Função para deletar aluno da turma correta
   const handleDeleteAluno = (year, alunoId) => {
     setAlunosList(prev => ({
       ...prev,
@@ -148,7 +144,7 @@ export default function App() {
             <TeacherDetailsView 
               year={selectedYear} 
               teacher={selectedTeacher} 
-              alunos={alunosList[selectedYear] || []} // Passa só os alunos do ano selecionado
+              alunos={alunosList[selectedYear] || []}
               onAddAluno={(novoAluno) => handleAddAluno(selectedYear, novoAluno)}
               onDeleteAluno={(id) => handleDeleteAluno(selectedYear, id)}
               onAddTask={() => navigateTo('add-task', selectedYear, selectedTeacher)} 
@@ -157,7 +153,7 @@ export default function App() {
           
           {currentPage === 'add-task' && 
             <AddTaskView 
-              alunos={alunosList[selectedYear] || []} // Passa só os alunos do ano selecionado
+              alunos={alunosList[selectedYear] || []}
               onSave={() => navigateTo('teacher', selectedYear, selectedTeacher)} 
             />
           }
@@ -216,18 +212,25 @@ function DashboardView() {
         {data.map((item, idx) => (
           <div key={item.name} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center">
             <h3 className="font-bold text-gray-700 mb-4">{item.name}</h3>
-            <div className="h-48 w-full">
+            <div className="h-56 w-full"> {/* Aumentei levemente a altura para caber a porcentagem */}
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={[{value: item.entregas}, {value: item.pendentes}]} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                  <Pie 
+                    data={[{name: 'Entregue', value: item.entregas}, {name: 'Pendente', value: item.pendentes}]} 
+                    innerRadius={45} 
+                    outerRadius={70} 
+                    paddingAngle={5} 
+                    dataKey="value"
+                    label={({ percent }) => percent > 0 ? `${(percent * 100).toFixed(0)}%` : ''}
+                  >
                     <Cell fill={COLORS[idx]} />
                     <Cell fill="#E5E7EB" />
                   </Pie>
-                  <Tooltip />
+                  <Tooltip formatter={(value) => `${value}%`} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="mt-4 text-center">
+            <div className="mt-2 text-center">
               <span className="text-2xl font-bold text-gray-800">{item.entregas}%</span>
               <p className="text-sm text-gray-500">Taxa de Conclusão</p>
             </div>
@@ -281,10 +284,9 @@ function TeacherDetailsView({ teacher, year, alunos, onAddTask, onAddAluno, onDe
   };
 
   const handleExcluir = (e, alunoId) => {
-    e.stopPropagation(); // Impede que a linha seja clicada (não abre o gráfico)
+    e.stopPropagation(); 
     if(window.confirm("Tem certeza que deseja excluir este aluno?")) {
       onDeleteAluno(alunoId);
-      // Se o aluno excluído era o que estava no gráfico, limpamos o gráfico
       if (selectedStudent?.id === alunoId) {
         setSelectedStudent(null);
       }
@@ -356,7 +358,13 @@ function TeacherDetailsView({ teacher, year, alunos, onAddTask, onAddAluno, onDe
                   <div className="h-64 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={studentData} innerRadius={60} outerRadius={80} dataKey="value">
+                        <Pie 
+                          data={studentData} 
+                          innerRadius={45} 
+                          outerRadius={70} 
+                          dataKey="value"
+                          label={({ percent }) => percent > 0 ? `${(percent * 100).toFixed(0)}%` : ''}
+                        >
                           {studentData.map((entry, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
                         </Pie>
                         <Tooltip />
