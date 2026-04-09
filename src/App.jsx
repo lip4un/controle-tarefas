@@ -5,7 +5,7 @@ import {
 import { 
   LayoutDashboard, UserCircle, GraduationCap, ChevronLeft, 
   Plus, LogOut, Menu, X, ClipboardList, Info, CheckCircle2, 
-  AlertCircle, XCircle, UserMinus, UserPlus, Trash2
+  AlertCircle, XCircle, UserMinus, UserPlus, Trash2, Edit
 } from 'lucide-react';
 
 // --- CONFIGURAÇÕES E DADOS INICIAIS ---
@@ -20,17 +20,30 @@ const STATUS_OPTIONS = [
 
 const MOCK_ALUNOS_POR_TURMA = {
   "1º Ano": [
-    { id: 1, nome: "Ana Beatriz", stats: { completa: 12, incompleta: 2, naofez: 1, faltou: 0 } },
-    { id: 2, nome: "Bruno Gomes", stats: { completa: 8, incompleta: 5, naofez: 2, faltou: 1 } },
+    { id: 1, nome: "Ana Beatriz" },
+    { id: 2, nome: "Bruno Gomes" },
   ],
   "2º Ano": [
-    { id: 3, nome: "Carlos Eduardo", stats: { completa: 15, incompleta: 0, naofez: 0, faltou: 0 } },
-    { id: 4, nome: "Daniela Costa", stats: { completa: 5, incompleta: 10, naofez: 3, faltou: 2 } },
+    { id: 3, nome: "Carlos Eduardo" },
+    { id: 4, nome: "Daniela Costa" },
   ],
   "3º Ano": [
-    { id: 5, nome: "Eduardo Felipe", stats: { completa: 20, incompleta: 1, naofez: 0, faltou: 0 } },
+    { id: 5, nome: "Eduardo Felipe" },
   ]
 };
+
+// Uma tarefa de exemplo para não começar 100% vazio
+const MOCK_TAREFAS = [
+  { 
+    id: 1, 
+    year: "1º Ano", 
+    teacher: "Joseliza", 
+    data: "2026-04-12", 
+    atividade: "Equações de 2º Grau", 
+    notas: { 1: "completa", 2: "incompleta" }, 
+    observacoes: { 1: "Excelente", 2: "Fez só a metade" } 
+  }
+];
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
 
@@ -41,33 +54,46 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [selectedYear, setSelectedYear] = useState(null);
   const [selectedTeacher, setSelectedTeacher] = useState(null);
+  const [selectedTask, setSelectedTask] = useState(null); // Tarefa sendo editada
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
   const [alunosList, setAlunosList] = useState(MOCK_ALUNOS_POR_TURMA);
+  const [tarefasList, setTarefasList] = useState(MOCK_TAREFAS);
 
   if (!user) {
     return <LoginPage onLogin={setUser} />;
   }
 
-  const navigateTo = (page, year = null, teacher = null) => {
+  const navigateTo = (page, year = null, teacher = null, task = null) => {
     setCurrentPage(page);
     setSelectedYear(year);
     setSelectedTeacher(teacher);
+    setSelectedTask(task);
     setSidebarOpen(false);
   };
 
   const handleAddAluno = (year, novoAluno) => {
-    setAlunosList(prev => ({
-      ...prev,
-      [year]: [...(prev[year] || []), novoAluno]
-    }));
+    setAlunosList(prev => ({ ...prev, [year]: [...(prev[year] || []), novoAluno] }));
   };
 
   const handleDeleteAluno = (year, alunoId) => {
-    setAlunosList(prev => ({
-      ...prev,
-      [year]: prev[year].filter(aluno => aluno.id !== alunoId)
-    }));
+    setAlunosList(prev => ({ ...prev, [year]: prev[year].filter(aluno => aluno.id !== alunoId) }));
+  };
+
+  const handleSaveTask = (taskData) => {
+    if (taskData.id) {
+      // Editando tarefa existente
+      setTarefasList(prev => prev.map(t => t.id === taskData.id ? taskData : t));
+    } else {
+      // Criando nova tarefa
+      setTarefasList(prev => [...prev, { ...taskData, id: Date.now() }]);
+    }
+    navigateTo('teacher', selectedYear, selectedTeacher);
+  };
+
+  const handleDeleteTask = (taskId) => {
+    setTarefasList(prev => prev.filter(t => t.id !== taskId));
+    navigateTo('teacher', selectedYear, selectedTeacher);
   };
 
   return (
@@ -125,7 +151,7 @@ export default function App() {
 
           {currentPage !== 'dashboard' && (
             <button 
-              onClick={() => currentPage === 'add-task' ? navigateTo('teacher', selectedYear, selectedTeacher) : navigateTo('class', selectedYear)}
+              onClick={() => currentPage === 'task-form' ? navigateTo('teacher', selectedYear, selectedTeacher) : navigateTo('class', selectedYear)}
               className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
             >
               <ChevronLeft size={18} /> <span className="hidden sm:inline">Voltar</span>
@@ -145,16 +171,23 @@ export default function App() {
               year={selectedYear} 
               teacher={selectedTeacher} 
               alunos={alunosList[selectedYear] || []}
+              tarefas={tarefasList.filter(t => t.year === selectedYear && t.teacher === selectedTeacher)}
               onAddAluno={(novoAluno) => handleAddAluno(selectedYear, novoAluno)}
               onDeleteAluno={(id) => handleDeleteAluno(selectedYear, id)}
-              onAddTask={() => navigateTo('add-task', selectedYear, selectedTeacher)} 
+              onEditTask={(task) => navigateTo('task-form', selectedYear, selectedTeacher, task)}
+              onAddTask={() => navigateTo('task-form', selectedYear, selectedTeacher)} 
             />
           }
           
-          {currentPage === 'add-task' && 
-            <AddTaskView 
+          {currentPage === 'task-form' && 
+            <TaskFormView 
+              task={selectedTask}
+              year={selectedYear}
+              teacher={selectedTeacher}
               alunos={alunosList[selectedYear] || []}
-              onSave={() => navigateTo('teacher', selectedYear, selectedTeacher)} 
+              onSave={handleSaveTask}
+              onDelete={handleDeleteTask}
+              onCancel={() => navigateTo('teacher', selectedYear, selectedTeacher)} 
             />
           }
         </section>
@@ -212,7 +245,7 @@ function DashboardView() {
         {data.map((item, idx) => (
           <div key={item.name} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center">
             <h3 className="font-bold text-gray-700 mb-4">{item.name}</h3>
-            <div className="h-56 w-full"> {/* Aumentei levemente a altura para caber a porcentagem */}
+            <div className="h-56 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie 
@@ -258,12 +291,26 @@ function ClassView({ year, onSelectTeacher }) {
   );
 }
 
-function TeacherDetailsView({ teacher, year, alunos, onAddTask, onAddAluno, onDeleteAluno }) {
+function TeacherDetailsView({ teacher, year, alunos, tarefas, onAddTask, onEditTask, onAddAluno, onDeleteAluno }) {
   const [activeTab, setActiveTab] = useState('alunos');
-  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [selectedStudentId, setSelectedStudentId] = useState(null);
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [novoNome, setNovoNome] = useState('');
+
+  // Cálculo de estatísticas dinâmicas baseadas nas tarefas salvas
+  const alunosComStats = alunos.map(aluno => {
+    const stats = { completa: 0, incompleta: 0, naofez: 0, faltou: 0 };
+    tarefas.forEach(t => {
+      const status = t.notas[aluno.id];
+      if (status && stats[status] !== undefined) {
+        stats[status]++;
+      }
+    });
+    return { ...aluno, stats };
+  });
+
+  const selectedStudent = alunosComStats.find(a => a.id === selectedStudentId);
 
   const studentData = selectedStudent ? [
     { name: 'Completa', value: selectedStudent.stats.completa },
@@ -274,11 +321,7 @@ function TeacherDetailsView({ teacher, year, alunos, onAddTask, onAddAluno, onDe
 
   const handleSaveNovoAluno = () => {
     if (novoNome.trim() === '') return;
-    onAddAluno({
-      id: Date.now(),
-      nome: novoNome,
-      stats: { completa: 0, incompleta: 0, naofez: 0, faltou: 0 }
-    });
+    onAddAluno({ id: Date.now(), nome: novoNome });
     setNovoNome('');
     setShowAddModal(false);
   };
@@ -287,10 +330,13 @@ function TeacherDetailsView({ teacher, year, alunos, onAddTask, onAddAluno, onDe
     e.stopPropagation(); 
     if(window.confirm("Tem certeza que deseja excluir este aluno?")) {
       onDeleteAluno(alunoId);
-      if (selectedStudent?.id === alunoId) {
-        setSelectedStudent(null);
-      }
+      if (selectedStudentId === alunoId) setSelectedStudentId(null);
     }
+  };
+
+  const formatDate = (dateStr) => {
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
   };
 
   return (
@@ -326,8 +372,8 @@ function TeacherDetailsView({ teacher, year, alunos, onAddTask, onAddAluno, onDe
                 <tr><th className="px-6 py-3">Aluno</th><th className="px-6 py-3">Ações</th></tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {alunos.map(aluno => (
-                  <tr key={aluno.id} className="hover:bg-blue-50 cursor-pointer transition" onClick={() => setSelectedStudent(aluno)}>
+                {alunosComStats.map(aluno => (
+                  <tr key={aluno.id} className="hover:bg-blue-50 cursor-pointer transition" onClick={() => setSelectedStudentId(aluno.id)}>
                     <td className="px-6 py-4 font-medium">{aluno.nome}</td>
                     <td className="px-6 py-4 flex items-center gap-4">
                       <span className="text-blue-600 text-sm font-medium">Ver gráfico</span>
@@ -386,14 +432,34 @@ function TeacherDetailsView({ teacher, year, alunos, onAddTask, onAddAluno, onDe
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
           <table className="w-full text-left">
             <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-semibold">
-              <tr><th className="px-6 py-3">Data</th><th className="px-6 py-3">Atividade</th><th className="px-6 py-3 text-center">Status</th></tr>
+              <tr>
+                <th className="px-6 py-3">Data</th>
+                <th className="px-6 py-3">Atividade</th>
+                <th className="px-6 py-3 text-center">Entregas</th>
+                <th className="px-6 py-3">Ação</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              <tr>
-                <td className="px-6 py-4 text-sm text-gray-600">12/04/2026</td>
-                <td className="px-6 py-4 font-medium text-gray-800">Equações de 2º Grau</td>
-                <td className="px-6 py-4 text-center"><span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">Concluída</span></td>
-              </tr>
+              {tarefas.map(tarefa => {
+                const completas = Object.values(tarefa.notas).filter(n => n === 'completa').length;
+                return (
+                  <tr key={tarefa.id} className="hover:bg-blue-50 cursor-pointer transition" onClick={() => onEditTask(tarefa)}>
+                    <td className="px-6 py-4 text-sm text-gray-600">{formatDate(tarefa.data)}</td>
+                    <td className="px-6 py-4 font-medium text-gray-800">{tarefa.atividade}</td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">
+                        {completas}/{alunos.length} Completas
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-blue-600 text-sm font-medium flex items-center gap-1">
+                      <Edit size={16} /> Editar
+                    </td>
+                  </tr>
+                );
+              })}
+              {tarefas.length === 0 && (
+                <tr><td colSpan="4" className="text-center text-gray-400 py-6">Nenhuma tarefa registrada nesta turma.</td></tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -434,20 +500,55 @@ function TeacherDetailsView({ teacher, year, alunos, onAddTask, onAddAluno, onDe
   );
 }
 
-function AddTaskView({ alunos, onSave }) {
+function TaskFormView({ task, year, teacher, alunos, onSave, onDelete, onCancel }) {
+  const isEditing = !!task;
+  const [atividade, setAtividade] = useState(task?.atividade || '');
+  const [data, setData] = useState(task?.data || new Date().toISOString().split('T')[0]);
+  
+  const [notas, setNotas] = useState(task?.notas || {});
+  const [observacoes, setObservacoes] = useState(task?.observacoes || {});
+
+  const handleStatusChange = (alunoId, statusId) => {
+    setNotas({ ...notas, [alunoId]: statusId });
+  };
+
+  const handleObsChange = (alunoId, value) => {
+    setObservacoes({ ...observacoes, [alunoId]: value });
+  };
+
+  const handleSaveClick = () => {
+    if (!atividade.trim()) return alert("Por favor, preencha o nome da atividade.");
+    onSave({ id: task?.id, year, teacher, atividade, data, notas, observacoes });
+  };
+
+  const handleDeleteClick = () => {
+    if (window.confirm("Tem certeza que deseja apagar esta tarefa do histórico?")) {
+      onDelete(task.id);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20">
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-4">
-        <h2 className="text-xl font-bold flex items-center gap-2"><ClipboardList className="text-blue-600"/> Registrar Nova Tarefa</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Atividade Sobre:</label>
-            <input type="text" placeholder="Ex: Teorema de Pitágoras" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Data:</label>
-            <input type="date" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" defaultValue={new Date().toISOString().split('T')[0]} />
-          </div>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold flex items-center gap-2">
+          <ClipboardList className="text-blue-600"/> 
+          {isEditing ? 'Editar Tarefa' : 'Registrar Nova Tarefa'}
+        </h2>
+        {isEditing && (
+          <button onClick={handleDeleteClick} className="text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg flex items-center gap-2 font-medium transition">
+            <Trash2 size={18} /> Apagar Tarefa
+          </button>
+        )}
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Atividade Sobre:</label>
+          <input type="text" value={atividade} onChange={(e) => setAtividade(e.target.value)} placeholder="Ex: Teorema de Pitágoras" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Data:</label>
+          <input type="date" value={data} onChange={(e) => setData(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
         </div>
       </div>
 
@@ -464,7 +565,13 @@ function AddTaskView({ alunos, onSave }) {
                   <div className="flex flex-wrap gap-2">
                     {STATUS_OPTIONS.map(opt => (
                       <label key={opt.id} className="cursor-pointer group relative">
-                        <input type="radio" name={`status-${aluno.id}`} className="sr-only peer" />
+                        <input 
+                          type="radio" 
+                          name={`status-${aluno.id}`} 
+                          checked={notas[aluno.id] === opt.id}
+                          onChange={() => handleStatusChange(aluno.id, opt.id)}
+                          className="sr-only peer" 
+                        />
                         <div className="px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all peer-checked:bg-opacity-10 peer-checked:ring-2" 
                              style={{ borderColor: '#E5E7EB', '--tw-ring-color': opt.color, '--tw-bg-opacity': '0.1' }}>
                           {opt.icon} <span className="hidden sm:inline">{opt.label}</span>
@@ -474,7 +581,13 @@ function AddTaskView({ alunos, onSave }) {
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <input type="text" placeholder="Nota rápida..." className="w-full min-w-37.5 p-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-300 rounded-lg text-sm outline-none transition" />
+                  <input 
+                    type="text" 
+                    value={observacoes[aluno.id] || ''}
+                    onChange={(e) => handleObsChange(aluno.id, e.target.value)}
+                    placeholder="Nota rápida..." 
+                    className="w-full min-w-37.5 p-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-300 rounded-lg text-sm outline-none transition" 
+                  />
                 </td>
               </tr>
             ))}
@@ -488,8 +601,10 @@ function AddTaskView({ alunos, onSave }) {
       </div>
 
       <div className="flex justify-end gap-3 pt-4">
-        <button onClick={onSave} className="px-6 py-2 border rounded-xl font-medium hover:bg-gray-50 transition">Cancelar</button>
-        <button onClick={onSave} className="px-8 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg transition">Salvar Tarefa</button>
+        <button onClick={onCancel} className="px-6 py-2 border rounded-xl font-medium hover:bg-gray-50 transition">Cancelar</button>
+        <button onClick={handleSaveClick} className="px-8 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg transition">
+          {isEditing ? 'Atualizar Tarefa' : 'Salvar Tarefa'}
+        </button>
       </div>
     </div>
   );
