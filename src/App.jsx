@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend 
 } from 'recharts';
 import { 
   LayoutDashboard, UserCircle, GraduationCap, ChevronLeft, 
   Plus, LogOut, Menu, X, ClipboardList, Info, CheckCircle2, 
-  AlertCircle, XCircle, UserMinus, UserPlus, Trash2, Edit
+  AlertCircle, XCircle, UserMinus, UserPlus, Trash2, Edit,
+  Printer, CheckCheck
 } from 'lucide-react';
 
 // --- CONFIGURAÇÕES E DADOS INICIAIS ---
@@ -32,36 +33,54 @@ const MOCK_ALUNOS_POR_TURMA = {
   ]
 };
 
-// Uma tarefa de exemplo para não começar 100% vazio
-const MOCK_TAREFAS = [
-  { 
-    id: 1, 
-    year: "1º Ano", 
-    teacher: "Joseliza", 
-    data: "2026-04-12", 
-    atividade: "Equações de 2º Grau", 
-    notas: { 1: "completa", 2: "incompleta" }, 
-    observacoes: { 1: "Excelente", 2: "Fez só a metade" } 
-  }
-];
+const MOCK_TAREFAS = [];
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
 
 // --- COMPONENTES DE INTERFACE ---
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  // MEMÓRIA DE LOGIN
+  const [user, setUser] = useState(() => {
+    return localStorage.getItem('pueri_logado') === 'true';
+  });
+
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [selectedYear, setSelectedYear] = useState(null);
   const [selectedTeacher, setSelectedTeacher] = useState(null);
-  const [selectedTask, setSelectedTask] = useState(null); // Tarefa sendo editada
+  const [selectedTask, setSelectedTask] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
-  const [alunosList, setAlunosList] = useState(MOCK_ALUNOS_POR_TURMA);
-  const [tarefasList, setTarefasList] = useState(MOCK_TAREFAS);
+  // DADOS SALVOS (LOCAL STORAGE)
+  const [alunosList, setAlunosList] = useState(() => {
+    const saved = localStorage.getItem('pueri_alunos');
+    return saved ? JSON.parse(saved) : MOCK_ALUNOS_POR_TURMA;
+  });
+  
+  const [tarefasList, setTarefasList] = useState(() => {
+    const saved = localStorage.getItem('pueri_tarefas');
+    return saved ? JSON.parse(saved) : MOCK_TAREFAS;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('pueri_alunos', JSON.stringify(alunosList));
+  }, [alunosList]);
+
+  useEffect(() => {
+    localStorage.setItem('pueri_tarefas', JSON.stringify(tarefasList));
+  }, [tarefasList]);
+
+  const handleLoginStatus = (status) => {
+    setUser(status);
+    if (status) {
+      localStorage.setItem('pueri_logado', 'true');
+    } else {
+      localStorage.removeItem('pueri_logado');
+    }
+  };
 
   if (!user) {
-    return <LoginPage onLogin={setUser} />;
+    return <LoginPage onLogin={() => handleLoginStatus(true)} />;
   }
 
   const navigateTo = (page, year = null, teacher = null, task = null) => {
@@ -82,10 +101,8 @@ export default function App() {
 
   const handleSaveTask = (taskData) => {
     if (taskData.id) {
-      // Editando tarefa existente
       setTarefasList(prev => prev.map(t => t.id === taskData.id ? taskData : t));
     } else {
-      // Criando nova tarefa
       setTarefasList(prev => [...prev, { ...taskData, id: Date.now() }]);
     }
     navigateTo('teacher', selectedYear, selectedTeacher);
@@ -123,7 +140,7 @@ export default function App() {
             <UserCircle size={20} />
             <span className="truncate">adm_pueri</span>
           </div>
-          <button onClick={() => setUser(null)} className="w-full mt-2 flex items-center gap-3 px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-lg transition">
+          <button onClick={() => handleLoginStatus(false)} className="w-full mt-2 flex items-center gap-3 px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-lg transition">
             <LogOut size={20} /> Sair
           </button>
         </div>
@@ -160,7 +177,7 @@ export default function App() {
         </header>
 
         <section className="flex-1 overflow-y-auto p-4 lg:p-8">
-          {currentPage === 'dashboard' && <DashboardView />}
+          {currentPage === 'dashboard' && <DashboardView tarefas={tarefasList} />}
           
           {currentPage === 'class' && 
             <ClassView year={selectedYear} onSelectTeacher={(t) => navigateTo('teacher', selectedYear, t)} />
@@ -231,12 +248,24 @@ function LoginPage({ onLogin }) {
   );
 }
 
-function DashboardView() {
-  const data = [
-    { name: '1º Ano', entregas: 85, pendentes: 15 },
-    { name: '2º Ano', entregas: 65, pendentes: 35 },
-    { name: '3º Ano', entregas: 92, pendentes: 8 },
-  ];
+function DashboardView({ tarefas }) {
+  const data = ANOS.map(ano => {
+    const tarefasDoAno = tarefas.filter(t => t.year === ano);
+    let totalNotas = 0;
+    let completas = 0;
+
+    tarefasDoAno.forEach(t => {
+      Object.values(t.notas).forEach(status => {
+        totalNotas++;
+        if (status === 'completa') completas++;
+      });
+    });
+
+    const entregas = totalNotas > 0 ? Math.round((completas / totalNotas) * 100) : 0;
+    const pendentes = totalNotas > 0 ? 100 - entregas : 0;
+
+    return { name: ano, entregas, pendentes, totalNotas };
+  });
 
   return (
     <div className="space-y-6">
@@ -245,28 +274,37 @@ function DashboardView() {
         {data.map((item, idx) => (
           <div key={item.name} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center">
             <h3 className="font-bold text-gray-700 mb-4">{item.name}</h3>
-            <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie 
-                    data={[{name: 'Entregue', value: item.entregas}, {name: 'Pendente', value: item.pendentes}]} 
-                    innerRadius={45} 
-                    outerRadius={70} 
-                    paddingAngle={5} 
-                    dataKey="value"
-                    label={({ percent }) => percent > 0 ? `${(percent * 100).toFixed(0)}%` : ''}
-                  >
-                    <Cell fill={COLORS[idx]} />
-                    <Cell fill="#E5E7EB" />
-                  </Pie>
-                  <Tooltip formatter={(value) => `${value}%`} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-2 text-center">
-              <span className="text-2xl font-bold text-gray-800">{item.entregas}%</span>
-              <p className="text-sm text-gray-500">Taxa de Conclusão</p>
-            </div>
+            {item.totalNotas > 0 ? (
+              <>
+                <div className="h-56 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie 
+                        data={[{name: 'Entregue', value: item.entregas}, {name: 'Pendente', value: item.pendentes}]} 
+                        innerRadius={45} 
+                        outerRadius={70} 
+                        paddingAngle={5} 
+                        dataKey="value"
+                        label={({ percent }) => percent > 0 ? `${(percent * 100).toFixed(0)}%` : ''}
+                      >
+                        <Cell fill={COLORS[idx]} />
+                        <Cell fill="#E5E7EB" />
+                      </Pie>
+                      <Tooltip formatter={(value) => `${value}%`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-2 text-center">
+                  <span className="text-2xl font-bold text-gray-800">{item.entregas}%</span>
+                  <p className="text-sm text-gray-500">Taxa de Conclusão</p>
+                </div>
+              </>
+            ) : (
+              <div className="h-56 flex flex-col items-center justify-center text-gray-400">
+                <Info size={32} className="mb-2 opacity-30" />
+                <p className="text-sm">Sem dados</p>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -298,14 +336,11 @@ function TeacherDetailsView({ teacher, year, alunos, tarefas, onAddTask, onEditT
   const [showAddModal, setShowAddModal] = useState(false);
   const [novoNome, setNovoNome] = useState('');
 
-  // Cálculo de estatísticas dinâmicas baseadas nas tarefas salvas
   const alunosComStats = alunos.map(aluno => {
     const stats = { completa: 0, incompleta: 0, naofez: 0, faltou: 0 };
     tarefas.forEach(t => {
       const status = t.notas[aluno.id];
-      if (status && stats[status] !== undefined) {
-        stats[status]++;
-      }
+      if (status && stats[status] !== undefined) stats[status]++;
     });
     return { ...aluno, stats };
   });
@@ -337,6 +372,67 @@ function TeacherDetailsView({ teacher, year, alunos, tarefas, onAddTask, onEditT
   const formatDate = (dateStr) => {
     const [y, m, d] = dateStr.split('-');
     return `${d}/${m}/${y}`;
+  };
+
+  const imprimirRelatorio = (aluno) => {
+    const historico = tarefas.filter(t => t.notas[aluno.id]);
+    
+    let html = `
+      <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #2563EB; border-bottom: 2px solid #E5E7EB; padding-bottom: 10px;">Relatório de Desempenho</h1>
+        <div style="margin-bottom: 30px;">
+          <p><strong>Aluno:</strong> ${aluno.nome}</p>
+          <p><strong>Turma:</strong> ${year} | <strong>Professor:</strong> ${teacher}</p>
+          <p><strong>Disciplina:</strong> Matemática</p>
+        </div>
+        
+        <h3 style="color: #374151;">Resumo Geral</h3>
+        <ul style="list-style: none; padding: 0; display: flex; gap: 20px; background: #F3F4F6; padding: 15px; border-radius: 8px;">
+          <li style="color: #10B981;"><strong>Completas:</strong> ${aluno.stats.completa}</li>
+          <li style="color: #F59E0B;"><strong>Incompletas:</strong> ${aluno.stats.incompleta}</li>
+          <li style="color: #EF4444;"><strong>Não fez:</strong> ${aluno.stats.naofez}</li>
+          <li style="color: #6B7280;"><strong>Faltou:</strong> ${aluno.stats.faltou}</li>
+        </ul>
+
+        <h3 style="color: #374151; margin-top: 30px;">Histórico de Tarefas</h3>
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+          <thead>
+            <tr style="background: #F9FAFB; border-bottom: 2px solid #E5E7EB;">
+              <th style="padding: 12px; border: 1px solid #E5E7EB;">Data</th>
+              <th style="padding: 12px; border: 1px solid #E5E7EB;">Atividade</th>
+              <th style="padding: 12px; border: 1px solid #E5E7EB;">Status</th>
+              <th style="padding: 12px; border: 1px solid #E5E7EB;">Observação</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    if (historico.length === 0) {
+      html += `<tr><td colspan="4" style="padding: 12px; text-align: center; border: 1px solid #E5E7EB;">Nenhuma tarefa registrada.</td></tr>`;
+    } else {
+      historico.forEach(t => {
+        const statusObj = STATUS_OPTIONS.find(o => o.id === t.notas[aluno.id]);
+        const statusLabel = statusObj ? statusObj.label : '-';
+        const statusColor = statusObj ? statusObj.color : '#000';
+        const obs = t.observacoes[aluno.id] || '-';
+        
+        html += `
+          <tr>
+            <td style="padding: 12px; border: 1px solid #E5E7EB;">${formatDate(t.data)}</td>
+            <td style="padding: 12px; border: 1px solid #E5E7EB;">${t.atividade}</td>
+            <td style="padding: 12px; border: 1px solid #E5E7EB; color: ${statusColor}; font-weight: bold;">${statusLabel}</td>
+            <td style="padding: 12px; border: 1px solid #E5E7EB;">${obs}</td>
+          </tr>
+        `;
+      });
+    }
+
+    html += `</tbody></table></div>`;
+
+    const win = window.open('', '_blank');
+    win.document.write(`<html><head><title>Relatório - ${aluno.nome}</title></head><body>${html}</body></html>`);
+    win.document.close();
+    setTimeout(() => { win.print(); }, 500);
   };
 
   return (
@@ -394,12 +490,22 @@ function TeacherDetailsView({ teacher, year, alunos, tarefas, onAddTask, onEditT
             )}
           </div>
           
-          <div className="bg-white p-6 rounded-xl shadow-sm border min-h-75 flex flex-col items-center justify-center">
+          <div className="bg-white p-6 rounded-xl shadow-sm border min-h-75 flex flex-col items-center justify-center relative">
             {selectedStudent ? (
               <>
-                <h3 className="font-bold text-gray-700 mb-4">Desempenho: {selectedStudent.nome}</h3>
+                <div className="w-full flex justify-between items-start mb-4">
+                  <h3 className="font-bold text-gray-700">Desempenho: {selectedStudent.nome}</h3>
+                  <button 
+                    onClick={() => imprimirRelatorio(selectedStudent)}
+                    className="flex items-center gap-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition"
+                    title="Imprimir Relatório"
+                  >
+                    <Printer size={16} /> Relatório
+                  </button>
+                </div>
+                
                 {selectedStudent.stats.completa === 0 && selectedStudent.stats.incompleta === 0 && selectedStudent.stats.naofez === 0 && selectedStudent.stats.faltou === 0 ? (
-                  <p className="text-gray-400 text-center">Este aluno ainda não tem tarefas registradas.</p>
+                  <p className="text-gray-400 text-center flex-1 flex items-center">Este aluno ainda não tem tarefas registradas.</p>
                 ) : (
                   <div className="h-64 w-full">
                     <ResponsiveContainer width="100%" height="100%">
@@ -465,7 +571,6 @@ function TeacherDetailsView({ teacher, year, alunos, tarefas, onAddTask, onEditT
         </div>
       )}
 
-      {/* --- MODAL DE NOVO ALUNO --- */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
@@ -516,6 +621,14 @@ function TaskFormView({ task, year, teacher, alunos, onSave, onDelete, onCancel 
     setObservacoes({ ...observacoes, [alunoId]: value });
   };
 
+  const handleMarcarTodos = () => {
+    const novasNotas = { ...notas };
+    alunos.forEach(aluno => {
+      novasNotas[aluno.id] = 'completa';
+    });
+    setNotas(novasNotas);
+  };
+
   const handleSaveClick = () => {
     if (!atividade.trim()) return alert("Por favor, preencha o nome da atividade.");
     onSave({ id: task?.id, year, teacher, atividade, data, notas, observacoes });
@@ -529,16 +642,21 @@ function TaskFormView({ task, year, teacher, alunos, onSave, onDelete, onCancel 
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h2 className="text-xl font-bold flex items-center gap-2">
           <ClipboardList className="text-blue-600"/> 
           {isEditing ? 'Editar Tarefa' : 'Registrar Nova Tarefa'}
         </h2>
-        {isEditing && (
-          <button onClick={handleDeleteClick} className="text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg flex items-center gap-2 font-medium transition">
-            <Trash2 size={18} /> Apagar Tarefa
+        <div className="flex gap-2 w-full sm:w-auto">
+          {isEditing && (
+            <button onClick={handleDeleteClick} className="text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg flex items-center gap-2 font-medium transition">
+              <Trash2 size={18} /> <span className="hidden sm:inline">Apagar Tarefa</span>
+            </button>
+          )}
+          <button onClick={handleMarcarTodos} className="bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1.5 rounded-lg flex items-center gap-2 font-medium transition w-full sm:w-auto justify-center">
+            <CheckCheck size={18} /> Marcar Todos Completos
           </button>
-        )}
+        </div>
       </div>
 
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4">
